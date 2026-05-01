@@ -1,0 +1,37 @@
+# Datasets — point clouds and projected images (large)
+FielGrwon_ZeaMays_RawPCD_100k/
+FielGrwon_ZeaMays_SegmentedPCD_100k/
+training_data_fmt/
+training_data_fmt_17/
+
+# Model checkpoints and weights
+*.pth
+*.ckpt
+*.pt
+runs/
+MaskRCNN/maskrcnn_2class/
+MaskRCNN/maskrcnn_17class/
+EOMT/eomt/eomt/
+EOMT/eomt/logs/
+
+# WandB logs
+wandb/
+EOMT/eomt/wandb/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# Eval outputs (regenerable)
+eval_maskrcnn_log.txt
+eval_eomt_log.txt
+
+# Conda/pip env dirs accidentally placed here
+enter/
+
+# OS
+.DS_Store
+Thumbs.db
