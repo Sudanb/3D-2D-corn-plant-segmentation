@@ -1,0 +1,14 @@
+# ── PyTorch (CUDA 11.8) ───────────────────────────────────────────────────────
+# Install via pip with the PyTorch index — do NOT install plain torch from PyPI
+# Command:
+#   pip install torch==2.7.1+cu118 torchvision==0.22.1+cu118 \
+#       --index-url https://download.pytorch.org/whl/cu118
+torch==2.7.1+cu118
+torchvision==0.22.1+cu118
+
+# ── Core dependencies ─────────────────────────────────────────────────────────
+numpy==2.4.4
+scipy==1.17.1
+Pillow==12.2.0
+opencv-python==4.13.0.33
+plyfile==1.1.3

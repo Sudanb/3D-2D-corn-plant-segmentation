@@ -1,0 +1,299 @@
+================================================================================
+KEYPOINTS PIPELINE — DECISION LOG
+Plant Morphology Regression from Projected RGB Images (Zea mays)
+================================================================================
+
+This document records every major design decision, the pitfall that motivated
+it, and why the chosen solution was preferred over alternatives.
+
+--------------------------------------------------------------------------------
+1. GOAL
+--------------------------------------------------------------------------------
+
+Starting point: 512 synthetic maize plants as point clouds (PLY files), each
+segmented into stem + up to 16 leaves by colour coding. The aim is to train a
+CV model that predicts plant morphological measurements (stem length, internode
+lengths, leaf lengths) from ordinary RGB images.
+
+--------------------------------------------------------------------------------
+2. MEASUREMENT EXTRACTION (measure_plants.py)
+--------------------------------------------------------------------------------
+
+DECISION: Extract ground truth measurements from 3D PLY files first, not from
+          images.
+
+WHY: The 3D data has the true geometry. Measuring in 3D avoids foreshortening,
+     occlusion, and all the ambiguities of a 2D projection. The regression model
+     is trained to predict these 3D-derived measurements from 2D images.
+
+────────────────────────────────────────────────────────────────────────────────
+2a. Stem length — voxel skeletonization (ATTEMPT 1, ABANDONED)
+────────────────────────────────────────────────────────────────────────────────
+
+ATTEMPT: Use skimage.morphology.skeletonize on a voxelized stem cloud.
+
+PITFALL: Produced 0.0m stem lengths for most plants. The stem point cloud is
+         sparse and thin relative to typical voxel sizes (1 cm). The voxelized
+         volume had isolated voxels that did not form a connected skeleton.
+         Skeletonization assumes a solid volume, not a scattered point cloud.
+
+────────────────────────────────────────────────────────────────────────────────
+2b. Stem length — MST skeleton (ATTEMPT 2, ABANDONED)
+────────────────────────────────────────────────────────────────────────────────
+
+ATTEMPT: Build a k-nearest-neighbour graph over stem points, compute a Minimum
+         Spanning Tree (MST), then find the diameter of the tree via double
+         Dijkstra (two passes of shortest path). The longest path = arc length.
+
+WHY MST: Works on sparse, thin point clouds with no voxel size dependency.
+         The diameter of an MST approximates the true arc length along a curve.
+
+PITFALL 1 — Inflated lengths (3m+):
+  Some PLY files had disjoint noise clusters far from the main stem. The MST
+  bridged these with long edges, inflating the measured length.
+  FIX: Statistical Outlier Removal (SOR) before MST. Each point's mean distance
+       to its k nearest neighbours is computed. Points more than SOR_STD
+       standard deviations above the mean are removed. Parameters: k=8, std=3.0.
+
+PITFALL 2 — Deflated lengths from largest_connected_component (LCC):
+  Added LCC to keep only the biggest cluster and discard noise. This caused
+  legitimate split stem segments to be dropped (if the stem was sparse and
+  captured in two disconnected clusters, only the larger survived).
+  FIX: Removed LCC entirely. SOR alone handles isolated noise without
+       discarding real structure. The MST naturally bridges small gaps.
+
+PITFALL 3 — Short stems (< 1m) with keypoints only near the top:
+  Visualisation showed that for some plants the stem point cloud only had
+  points near the top (lower stem was not captured in the scan). The MST
+  correctly measured what was there, but "what was there" was incomplete.
+  This is a data quality issue, not a code issue.
+  FIX: Raising SOR_STD from 2.0 to 3.0 (less aggressive removal) did not
+       resolve it. The underlying problem is the scan itself.
+
+PITFALL 4 — Disjointed stem clouds with large gaps:
+  Some stems had a large physical gap in the middle (sparse scan density).
+  The kNN graph could not bridge gaps larger than the neighbourhood radius.
+  The MST computed the diameter of whichever cluster node 0 landed in,
+  giving a partial measurement.
+  This was the decisive failure mode that led to abandoning MST for stems.
+
+────────────────────────────────────────────────────────────────────────────────
+2c. Stem length — Leaf attachment waypath (FINAL APPROACH)
+────────────────────────────────────────────────────────────────────────────────
+
+KEY INSIGHT: The segmented PLY files colour-code each leaf separately. Since
+leaves are attached to the stem at known positions, the leaf attachment points
+act as reliable waypoints distributed along the full stem height — even when
+the stem point cloud itself is disjointed.
+
+APPROACH:
+  1. For each leaf cloud (in order bottom-to-top), find the nearest stem point.
+     That is the attachment keypoint.
+  2. Find stem base = stem point with highest Z (down-positive coordinate
+     system) and stem tip = stem point with lowest Z.
+  3. Build path: base → attach[0] → attach[1] → ... → attach[N-1] → tip
+  4. Arc length = sum of Euclidean distances between consecutive waypoints.
+  5. Internode lengths = distances between consecutive attachment points only
+     (excludes base→first and last→tip segments).
+
+WHY THIS WORKS:
+  - Bypasses stem MST entirely — no sensitivity to stem gaps.
+  - Even if the stem has a large mid-section gap, leaves above and below
+    it still have correct attachment points on the stem.
+  - The gap becomes a longer internode segment, which is physically accurate.
+  - Only needs argmin/argmax Z from the stem cloud for base and tip.
+
+PITFALL — Z axis direction:
+  After flip_z (pts[:,2] = -pts[:,2] to match dataset_build.py), Z is
+  down-positive in this dataset (higher Z = lower in scene). This meant
+  leaf_entries.sort(ascending) accidentally sorted top-to-bottom.
+  Confirmed by visualisation: nodes 1-8 appeared top to bottom in images.
+  FIX: Sort leaf_entries descending by mean Z so bottom leaves come first.
+  Also swapped argmin/argmax for stem base/tip accordingly.
+
+DATA QUALITY DECISION:
+  Plants where stem_length_m < 1.0m are excluded from all dataset splits.
+  These plants have incomplete stem scans and their measurements are
+  unreliable. Training on them would add noise to the model.
+
+────────────────────────────────────────────────────────────────────────────────
+2d. Leaf lengths — MST arc length (KEPT THROUGHOUT)
+────────────────────────────────────────────────────────────────────────────────
+
+APPROACH: Same MST diameter approach (double Dijkstra) applied to each
+          individual leaf cloud. SOR applied first to remove noise.
+
+WHY: Leaves are thin, curved structures. MST arc length on a thin point cloud
+     gives true arc length along the curve, not just tip-to-tip distance.
+     Leaves are individually segmented so there are no cross-leaf gaps.
+     Subsampled to MAX_PTS=2000 for speed.
+
+--------------------------------------------------------------------------------
+3. COORDINATE SYSTEM
+--------------------------------------------------------------------------------
+
+The raw PLY files use a coordinate system where Z increases downward.
+dataset_build.py applies two transforms before rendering:
+  1. center_plant: subtract raw point cloud centroid
+  2. flip_z: negate Z (so up = positive Z in camera space)
+
+measure_plants.py applies only flip_z (no centering) when loading PLY files.
+keypoints.json therefore stores coordinates in flip_z-only space.
+
+When projecting keypoints for visualisation or 2D annotation, the full
+transform must be applied:
+  pts[:, :2] -= centroid[:2]    (centering XY)
+  pts[:,  2] += centroid[2]     (centering Z after flip = add, not subtract)
+
+This sign difference (+ not -) for Z is a subtle consequence of the
+interaction between centering and flip_z and caused incorrect keypoint
+projection until explicitly worked out.
+
+--------------------------------------------------------------------------------
+4. DATASET PIPELINE (reg_dataset.py)
+--------------------------------------------------------------------------------
+
+DECISION: Use the projected RGB images from dataset_build.py directly.
+
+WHY: Avoids re-rendering. The images already exist in training_data_fmt_17/
+     with train/val/test splits matching the YOLO segmentation pipeline splits.
+
+PLANT MAPPING:
+  dataset_build.py shuffles plants with random.seed(3) before assigning
+  plant_0001, plant_0002, ... indices. reg_dataset.py reproduces this exact
+  shuffle to map image filenames back to PLY stems and labels.json entries.
+  Without this, images would be paired with the wrong plant's measurements.
+
+TARGET LAYOUT (32 values per sample):
+  [0]       stem_length_m
+  [1..15]   internode_lengths_m  (up to 15, zero-padded if fewer)
+  [16..31]  leaf_lengths_m       (up to 16, zero-padded if fewer)
+
+VALIDITY MASK:
+  A boolean mask [32] marks which target slots are real vs zero-padding.
+  The loss function (masked MSE) only penalises valid slots. Without this,
+  the model would be penalised for not predicting 0.0 for absent leaves,
+  pulling predictions toward zero even for plants with many leaves.
+
+AUGMENTATION (train only):
+  Random horizontal flip + colour jitter (brightness, contrast, saturation).
+  Horizontal flip is valid because plant bilateral symmetry means a flipped
+  image is still a valid plant view. No vertical flip (plants have a clear
+  up direction). No rotation (camera always level in dataset_build.py).
+
+--------------------------------------------------------------------------------
+5. MODEL SELECTION
+--------------------------------------------------------------------------------
+
+DECISION: Three models, trained separately, compared on multi-view metrics.
+
+────────────────────────────────────────────────────────────────────────────────
+5a. EfficientNet-B3 (baseline — pretrained ImageNet)
+────────────────────────────────────────────────────────────────────────────────
+
+WHY BASELINE: Strong pretrained features. Plants share visual structure with
+              natural images (textures, edges, colours). Transfer learning
+              gives a strong starting point with only ~27k training samples.
+
+PARAMS: 11.6M. Chosen over B4/B5 to keep VRAM manageable at 640×640 input.
+
+ENCODER LR: 1e-4 (low — preserve pretrained weights).
+HEAD LR:    1e-3 (higher — head is randomly initialised).
+
+────────────────────────────────────────────────────────────────────────────────
+5b. ResNet-34 (pretrained ImageNet)
+────────────────────────────────────────────────────────────────────────────────
+
+WHY: ResNet is a widely studied architecture. Comparing against EfficientNet
+     shows whether the more modern compound-scaling (EfficientNet) actually
+     helps for this task, or whether a simpler architecture is sufficient.
+
+PARAMS: 21.6M. Larger than EfficientNet-B3 but simpler feature hierarchy.
+
+────────────────────────────────────────────────────────────────────────────────
+5c. Custom CNN (trained from scratch)
+────────────────────────────────────────────────────────────────────────────────
+
+WHY: Tests whether domain-specific features (plant structure, colour coding)
+     learned from scratch outperform or match ImageNet-pretrained features.
+     Also useful if the dataset is later expanded with real camera images
+     that differ significantly from the synthetic projection style.
+
+ARCHITECTURE: 5-stage residual CNN with skip connections, ~11.5M params.
+              Global average pooling → shared MLP head.
+
+TRAINING: Longer (80 epochs vs 60) and more patience (20 vs 15) because
+          training from scratch converges slower than fine-tuning.
+
+SHARED HEAD: All three models use the same 3-layer MLP head
+             (enc_dim → 512 → 128 → 32) with BatchNorm, ReLU, Dropout.
+             The final ReLU enforces non-negative outputs (lengths ≥ 0).
+
+--------------------------------------------------------------------------------
+6. LOSS FUNCTION
+--------------------------------------------------------------------------------
+
+DECISION: Masked MSE (mean squared error over valid positions only).
+
+WHY MSE OVER MAE: MSE penalises large errors more heavily, encouraging the
+                  model to avoid large outliers. Plant measurements have a
+                  natural scale (metres) so squared error is interpretable.
+
+WHY NOT HUBER: Huber loss adds a hyperparameter (delta). MSE is simpler and
+               sufficient for this regression range (0–3m).
+
+--------------------------------------------------------------------------------
+7. EVALUATION — MULTI-VIEW AGGREGATION
+--------------------------------------------------------------------------------
+
+PROBLEM: A single view of a plant may show leaves foreshortened (pointing
+         toward the camera), making them appear shorter than they are.
+         Any single-view prediction will have high variance.
+
+SOLUTION: Each plant has 75 views in the dataset (5 azimuths × 5 elevations
+          × 3 distances). At inference, predict on all 75 views independently
+          then average. This is ensemble-like: foreshortening errors from
+          different angles cancel out.
+
+METRICS: MAE, RMSE, R² reported separately for:
+  - Single-view (per-image baseline)
+  - Multi-view averaged (the real performance metric)
+  Per-slot breakdown (stem / each internode / each leaf) to diagnose
+  which measurement types are hardest to predict.
+
+--------------------------------------------------------------------------------
+8. PIPELINE SEPARATION
+--------------------------------------------------------------------------------
+
+Two independent pipelines share the same raw data:
+
+  CV_datasets/  (plain segmentation pipeline)
+    dataset_build.py      — render PLY → projected RGB images
+    training_format.py    — export YOLO-seg 17-class dataset
+    yolo_seg.py           — train YOLO segmentation model
+    runs/                 — YOLO outputs
+
+  CV_datasets/keypoints_pipeline/  (this pipeline)
+    measure_plants.py     — 3D measurement extraction → labels.json
+    visualize_suspicious.py — visual QC of measurements
+    project_keypoints.py  — project 3D keypoints → 2D per view
+    reg_dataset.py        — PyTorch dataset
+    reg_model.py          — model definitions
+    train_engine.py       — shared training loop
+    train_efficientnet.py — EfficientNet entry point
+    train_resnet34.py     — ResNet-34 entry point
+    train_custom.py       — Custom CNN entry point
+    eval_reg.py           — multi-view evaluation
+    training_data_fmt_17/ — copy of projected images (self-contained)
+    labels.json           — ground truth measurements
+    keypoints.json        — 3D attachment points
+    checkpoints/          — saved model weights + training history
+
+WHY SEPARATE: The YOLO segmentation pipeline is already running independently.
+              Keeping keypoints_pipeline self-contained avoids accidental
+              interference (path conflicts, shared output files) and makes
+              the regression work reproducible without the segmentation pipeline.
+
+================================================================================
+END OF DECISION LOG
+================================================================================

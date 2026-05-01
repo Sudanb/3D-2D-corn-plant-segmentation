@@ -1,0 +1,40 @@
+trainer:
+  max_epochs: 10
+  check_val_every_n_epoch: 2
+  limit_val_batches: 100
+  logger:
+    class_path: lightning.pytorch.loggers.CSVLogger
+    init_args:
+      save_dir: "logs"
+      name: "maize_instance_eomt_base_640"
+
+model:
+  class_path: training.mask_classification_instance.MaskClassificationInstance
+  init_args:
+    # num_classes and img_size linked automatically from data section
+    # Annealing steps scaled to maize dataset:
+    # 27300 images / batch_size 16 ≈ 1706 steps/epoch — anneal across epochs 1-4
+    attn_mask_annealing_enabled: True
+    attn_mask_annealing_start_steps: [1706, 3412, 5118, 6824]
+    attn_mask_annealing_end_steps:   [3412, 5118, 6824, 8530]
+    network:
+      class_path: models.eomt.EoMT
+      init_args:
+        num_q: 100
+        encoder:
+          class_path: models.vit.ViT
+          init_args:
+            backbone_name: vit_base_patch14_reg4_dinov2
+
+data:
+  class_path: datasets.coco_instance.MaizeInstance
+  init_args:
+    num_classes: 2
+    img_size: [640, 640]
+    batch_size: 16
+    num_workers: 8
+    color_jitter_enabled: True
+    scale_range: [0.5, 2.0]
+    check_empty_targets: True
+    # python main.py fit -c configs/dinov2/maize/instance/eomt_base_640.yaml \
+    #   --data.path ~/maize_data

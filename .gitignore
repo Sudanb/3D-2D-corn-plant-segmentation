@@ -1,8 +1,20 @@
 # Datasets — point clouds and projected images (large)
-FielGrwon_ZeaMays_RawPCD_100k/
-FielGrwon_ZeaMays_SegmentedPCD_100k/
+FielGrwon_ZeaMays_*/
 training_data_fmt/
 training_data_fmt_17/
+training_data/
+EOMT/maize_data/
+EOMT/maize_data_2class/
+
+# Miniconda installers
+Miniconda3*.sh
+Miniconda3*.exe
+
+# Unrelated / third-party repos
+u-net-release-2015-10-02/
+
+# Claude memory
+.claude/
 
 # Model checkpoints and weights
 *.pth

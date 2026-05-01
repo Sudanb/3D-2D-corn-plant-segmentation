@@ -1,0 +1,45 @@
+trainer:
+  max_epochs: 20
+  check_val_every_n_epoch: 5
+  # To use CSV logger instead of WandB, replace the block below with:
+  # logger:
+  #   class_path: lightning.pytorch.loggers.CSVLogger
+  #   init_args:
+  #     save_dir: "logs"
+  #     name: "maize_instance_eomt_large_640"
+  logger:
+    class_path: lightning.pytorch.loggers.WandbLogger
+    init_args:
+      resume: allow
+      project: "eomt"
+      name: "maize_instance_eomt_large_640"
+
+model:
+  class_path: training.mask_classification_instance.MaskClassificationInstance
+  init_args:
+    # num_classes and img_size are linked automatically from data section
+    # Annealing steps scaled to maize dataset:
+    # 27300 images / batch_size 8 ≈ 3413 steps/epoch — anneal across epochs 1-4
+    attn_mask_annealing_enabled: True
+    attn_mask_annealing_start_steps: [3413, 6826, 10239, 13652]
+    attn_mask_annealing_end_steps:   [6826, 10239, 13652, 17065]
+    network:
+      class_path: models.eomt.EoMT
+      init_args:
+        num_q: 100    # 17 classes — fewer queries needed than COCO's 200
+        encoder:
+          class_path: models.vit.ViT
+
+data:
+  class_path: datasets.coco_instance.MaizeInstance
+  init_args:
+    num_classes: 17
+    img_size: [640, 640]
+    batch_size: 8
+    num_workers: 8        # WSL/Linux supports multiprocessing — use 8 workers
+    color_jitter_enabled: True
+    scale_range: [0.5, 2.0]
+    check_empty_targets: True
+    # Pass data path at runtime:
+    # python main.py fit -c configs/dinov2/maize/instance/eomt_large_640.yaml \
+    #   --data.path C:\Users\sudanb\Desktop\CV_datasets\EOMT\maize_data

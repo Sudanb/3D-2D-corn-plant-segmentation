@@ -1,0 +1,28 @@
+{
+  "model": "eomt_dinov2_small",
+  "split": "test",
+  "checkpoint": "/mnt/c/Users/sudanb/Desktop/CV_datasets/EOMT/eomt/logs/maize_instance_eomt_small_640/version_0/checkpoints/epoch=9-step=17060.ckpt",
+  "mAP50-95": 0.1905,
+  "mAP50": 0.5584,
+  "mAP75": 0.0815,
+  "mAP_small": 0.1046,
+  "mAP_medium": 0.2493,
+  "mAP_large": 0.2928,
+  "per_class": {
+    "all": {
+      "mAP50": 0.5584,
+      "mAP50-95": 0.1905,
+      "Recall": 0.2396
+    },
+    "stem": {
+      "mAP50": 0.324,
+      "mAP50-95": 0.0543,
+      "Recall": 0.1061
+    },
+    "leaf": {
+      "mAP50": 0.7928,
+      "mAP50-95": 0.3267,
+      "Recall": 0.3731
+    }
+  }
+}
