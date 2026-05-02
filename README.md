@@ -57,6 +57,6 @@ CV_datasets/
 
 Not included in this repository (large binary files). The pipeline to regenerate projected images from TLS point clouds is in `dataset_build.py`. See `methodology/data_preparation.md` for full details.
 
-- 393 field-grown maize plants
-- 75 projected views per plant → 29,475 total images
-- Split: 275 train / 59 val / 59 test (plant-level, seed=3)
+- 520 field-grown maize plants
+- 75 projected views per plant → 39,000 total images
+- Split: 364 train / 78 val / 78 test (plant-level, seed=3)

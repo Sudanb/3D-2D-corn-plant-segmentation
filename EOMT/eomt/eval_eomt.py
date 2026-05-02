@@ -34,18 +34,21 @@ BACKBONES = {
     "large": "vit_large_patch14_reg4_dinov2",
 }
 
-CLASS_NAMES = ["stem", "leaf"]
+CLASS_NAMES_2  = ["stem", "leaf"]
+CLASS_NAMES_17 = ["stem", "leaf1", "leaf2", "leaf3", "leaf4", "leaf5", "leaf6",
+                  "leaf7", "leaf8", "leaf9", "leaf10", "leaf11", "leaf12",
+                  "leaf13", "leaf14", "leaf15", "leaf16"]
 
 
-def build_model(backbone_name: str, ckpt_path: str, device: torch.device):
+def build_model(backbone_name: str, ckpt_path: str, device: torch.device, num_classes: int):
     encoder = ViT(img_size=(640, 640), backbone_name=backbone_name)
-    network = EoMT(encoder=encoder, num_classes=2, num_q=100)
+    network = EoMT(encoder=encoder, num_classes=num_classes, num_q=100)
     model = MaskClassificationInstance.load_from_checkpoint(
         ckpt_path,
         map_location=device,
         network=network,
         img_size=(640, 640),
-        num_classes=2,
+        num_classes=num_classes,
         attn_mask_annealing_enabled=False,
         strict=False,
     )
@@ -129,6 +132,7 @@ def main():
     parser.add_argument("--data_path",   required=True)
     parser.add_argument("--model",       default="small", choices=["small", "base", "large"])
     parser.add_argument("--split",       default="test",  choices=["val", "test"])
+    parser.add_argument("--num_classes", default=2, type=int, choices=[2, 17])
     parser.add_argument("--batch_size",  default=8, type=int)
     parser.add_argument("--num_workers", default=8, type=int)
     parser.add_argument("--limit_batches", default=None, type=int)
@@ -142,11 +146,12 @@ def main():
     print(f"Data       : {args.data_path}")
     print(f"Device     : {device}\n")
 
-    model = build_model(BACKBONES[args.model], args.ckpt, device)
+    CLASS_NAMES = CLASS_NAMES_2 if args.num_classes == 2 else CLASS_NAMES_17
+    model = build_model(BACKBONES[args.model], args.ckpt, device, args.num_classes)
 
     datamodule = MaizeInstance(
         path=args.data_path,
-        num_classes=2,
+        num_classes=args.num_classes,
         img_size=(640, 640),
         batch_size=args.batch_size,
         num_workers=args.num_workers,

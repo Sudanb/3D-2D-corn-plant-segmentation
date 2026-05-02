@@ -14,6 +14,7 @@
 |----------|-------|
 | Domain | Precision agriculture — field-grown maize |
 | Task | Instance segmentation |
+| Total images | 39,000 |
 | Training images | 27,300 |
 | Annotation format | COCO JSON (polygon) |
 | Image format | PNG, RGB |

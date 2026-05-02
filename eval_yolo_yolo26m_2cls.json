@@ -1,0 +1,31 @@
+{
+  "model": "yolo26m_2cls_10ep",
+  "mAP50": 0.536,
+  "mAP50-95": 0.2423,
+  "Recall": 0.5187,
+  "inference_fps": 110.62,
+  "inference_ms_per_image": 9.04,
+  "speed_breakdown_ms": {
+    "preprocess": 0.77,
+    "inference": 9.04,
+    "loss": 0.0,
+    "postprocess": 0.55
+  },
+  "per_class": {
+    "all": {
+      "mAP50": 0.536,
+      "mAP50-95": 0.2423,
+      "Recall": 0.5187
+    },
+    "stem": {
+      "mAP50": 0.3356,
+      "mAP50-95": 0.1017,
+      "Recall": 0.3482
+    },
+    "leaf": {
+      "mAP50": 0.7364,
+      "mAP50-95": 0.3829,
+      "Recall": 0.6891
+    }
+  }
+}

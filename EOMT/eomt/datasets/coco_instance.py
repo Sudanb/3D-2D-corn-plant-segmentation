@@ -15,8 +15,8 @@ from datasets.transforms import Transforms
 from datasets.dataset import Dataset
 
 # COCO category IDs (1-indexed): 1=stem, 2-17=leaf1-16
-# Merged into 2 classes: 0=stem, 1=leaf
-CLASS_MAPPING = {1: 0, **{i: 1 for i in range(2, 18)}}
+CLASS_MAPPING_2  = {1: 0, **{i: 1 for i in range(2, 18)}}   # 2-class: all leaves → 1
+CLASS_MAPPING_17 = {i: i - 1 for i in range(1, 18)}          # 17-class: preserve per-leaf identity
 
 
 class MaizeInstance(LightningDataModule):
@@ -56,10 +56,11 @@ class MaizeInstance(LightningDataModule):
         height: int,
         **kwargs
     ):
+        class_mapping = kwargs.get("_class_mapping", CLASS_MAPPING_2)
         masks, labels, is_crowd = [], [], []
 
         for label_id, cls_id in labels_by_id.items():
-            if cls_id not in CLASS_MAPPING:
+            if cls_id not in class_mapping:
                 continue
 
             segmentation = polygons_by_id[label_id]
@@ -67,15 +68,21 @@ class MaizeInstance(LightningDataModule):
             rle = coco_mask.merge(rles) if isinstance(rles, list) else rles
 
             masks.append(tv_tensors.Mask(coco_mask.decode(rle), dtype=torch.bool))
-            labels.append(CLASS_MAPPING[cls_id])
+            labels.append(class_mapping[cls_id])
             is_crowd.append(is_crowd_by_id[label_id])
 
         return masks, labels, is_crowd
 
     def setup(self, stage: Union[str, None] = None) -> LightningDataModule:
+        class_mapping = CLASS_MAPPING_17 if self.num_classes == 17 else CLASS_MAPPING_2
+
+        def target_parser_with_mapping(*args, **kwargs):
+            kwargs["_class_mapping"] = class_mapping
+            return MaizeInstance.target_parser(*args, **kwargs)
+
         dataset_kwargs = {
             "img_suffix": ".png",
-            "target_parser": self.target_parser,
+            "target_parser": target_parser_with_mapping,
             "only_annotations_json": True,
             "check_empty_targets": self.check_empty_targets,
         }

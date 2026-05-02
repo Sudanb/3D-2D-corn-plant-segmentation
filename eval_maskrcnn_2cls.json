@@ -1,0 +1,26 @@
+{
+  "model": "maskrcnn_2cls",
+  "mAP50": 0.3915,
+  "mAP50-95": 0.1481,
+  "Recall": 0.2154,
+  "inference_fps": 8.41,
+  "inference_ms_per_image": 118.95,
+  "inference_total_s": 695.88,
+  "per_class": {
+    "all": {
+      "mAP50": 0.3915,
+      "mAP50-95": 0.1481,
+      "Recall": 0.2154
+    },
+    "stem": {
+      "mAP50": 0.0507,
+      "mAP50-95": 0.0072,
+      "Recall": 0.046
+    },
+    "leaf": {
+      "mAP50": 0.7323,
+      "mAP50-95": 0.2891,
+      "Recall": 0.3847
+    }
+  }
+}

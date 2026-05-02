@@ -104,10 +104,10 @@ Plants are split at the plant level (not image level) to prevent data leakage:
 
 | Split | Plants | Images (×75 views) |
 |-------|--------|-------------------|
-| Train | 275 | 20,625 |
-| Val | 59 | 4,425 |
-| Test | 59 | 4,425 |
-| **Total** | **393** | **29,475** |
+| Train | 364 | 27,300 |
+| Val | 78 | 5,850 |
+| Test | 78 | 5,850 |
+| **Total** | **520** | **39,000** |
 
 Split uses random seed 3 for reproducibility.
 

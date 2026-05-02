@@ -34,7 +34,7 @@ This document explains the rationale behind key decisions made throughout the pr
 
 ## 3. Dataset Split — Plant-Level Not Image-Level
 
-**Decision**: Split 393 plants into train/val/test (275/59/59) at the **plant level**.
+**Decision**: Split 520 plants into train/val/test (364/78/78) at the **plant level**.
 
 **Rationale**:
 - All 75 views of a single plant share the same 3D geometry and label set; splitting at the image level would leak correlated views into both train and test

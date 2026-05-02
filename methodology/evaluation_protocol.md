@@ -8,8 +8,8 @@ All models are evaluated on the held-out **test split** (59 plants × 75 views =
 
 | Property | Value |
 |----------|-------|
-| Plants | 59 (held out at plant level — no image-level leakage) |
-| Images | 4,425 (59 × 75 views) |
+| Plants | 78 (held out at plant level — no image-level leakage) |
+| Images | 5,850 (78 × 75 views) |
 | Split seed | 3 |
 | Annotation format | COCO JSON polygon segmentation |
 
